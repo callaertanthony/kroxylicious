@@ -159,9 +159,9 @@ producerPerf() {
   # ]
 
   # shellcheck disable=SC2086
-  ${CONTAINER_ENGINE} run --rm --network ${PERF_NETWORK} "${KAFKA_TOOL_IMAGE}" \
+  ${CONTAINER_ENGINE} run -v $(pwd)/performance-tests/client.properties:/client.properties --rm --network ${PERF_NETWORK} "${KAFKA_TOOL_IMAGE}" \
       bin/kafka-producer-perf-test.sh --topic "${TOPIC}" --throughput -1 --num-records "${NUM_RECORDS}" --record-size "${RECORD_SIZE}" \
-      --producer-props ${PRODUCER_PROPERTIES} bootstrap.servers="${ENDPOINT}" | \
+      --producer-props ${PRODUCER_PROPERTIES} bootstrap.servers="${ENDPOINT}" --producer.config /client.properties | \
       jq --raw-input --arg name "${TESTNAME}" --arg commit_id "${COMMIT_ID}" '[.,inputs] | [.[] | match("^(?<sent>\\d+) *records sent" +
                                     ", *(?<rate_rps>\\d+[.]?\\d*) records/sec [(](?<rate_mips>\\d+[.]?\\d*) MB/sec[)]" +
                                     ", *(?<avg_lat_ms>\\d+[.]?\\d*) ms avg latency" +
@@ -199,9 +199,9 @@ consumerPerf() {
   #    "percentile50": 644, "percentile95": 744, "percentile99": 753, "percentile999": 758 }
   # ]
 
-  ${CONTAINER_ENGINE} run --rm --network ${PERF_NETWORK} "${KAFKA_TOOL_IMAGE}"  \
+  ${CONTAINER_ENGINE} run -v $(pwd)/performance-tests/client.properties:/client.properties --rm --network ${PERF_NETWORK} "${KAFKA_TOOL_IMAGE}" \
       bin/kafka-consumer-perf-test.sh --topic "${TOPIC}" --messages "${NUM_RECORDS}" --hide-header \
-      --bootstrap-server "${ENDPOINT}" |
+      --bootstrap-server "${ENDPOINT}" --consumer.config /client.properties |
        jq --raw-input --arg name "${TESTNAME}" --arg commit_id "${COMMIT_ID}"  '[.,inputs] | [.[] | match("^(?<start.time>\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}:\\d{3}), " +
                                         "(?<end.time>\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}:\\d{3}), " +
                                         "(?<data.consumed.in.MB>\\d+[.]?\\d*), " +
@@ -250,6 +250,8 @@ onExit() {
 trap onExit EXIT
 
 TMP=$(mktemp -d)
+ON_SHUTDOWN+=("docker logs keycloak")
+ON_SHUTDOWN+=("docker logs kroxylicious")
 ON_SHUTDOWN+=("rm -rf ${TMP}")
 
 # Bring up Kafka
